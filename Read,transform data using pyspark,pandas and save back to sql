@@ -21,7 +21,7 @@ hostname = "1a9zf9.h.filess.io"
 database = "employee_wordkeepto"
 port = "3307"
 username = "employee_wordkeepto"
-password = "00e89852b82359eff01145fd1150d8d7512cf329"
+password = "..........."
 
 #main logic
 try:
