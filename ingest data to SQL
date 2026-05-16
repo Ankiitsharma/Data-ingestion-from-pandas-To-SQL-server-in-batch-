@@ -1,0 +1,98 @@
+#%python
+
+#%pip install mysql-connector-python
+#%pip install sqlalchemy
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+import logging
+from pyspark.sql.functions import count, when, col
+import pandas as pd
+
+logging.getLogger().handlers.clear()
+
+#logging configurations
+logging.basicConfig(
+    filename="tmp/app.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+#db details 
+hostname = "1a9zf9.h.filess.io"
+database = "employee_wordkeepto"
+port = "3307"
+username = "employee_wordkeepto"
+password = "00e89852b82359eff01145fd1150d8d7512cf329"
+
+#main logic
+try:
+
+    engine = create_engine(
+        f"mysql+mysqlconnector://{username}:{password}@{hostname}:{port}/{database}"
+    )
+
+    # Create connection
+    with engine.connect() as connection:
+
+        print("Connected successfully using SQLAlchemy")
+        # Get current database
+        db_query = text("SELECT DATABASE()")
+        db_name = connection.execute(db_query).fetchone()
+        logging.info(f"You're connected to database: {db_name[0]}")
+
+        table_name = "employee_data"
+        #we need to create the table if not exists 
+        connection.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        logging.info("Dropped the table if exists already")
+
+        #create table 
+        table_query = f"""
+        CREATE TABLE {table_name}(
+            emp_id INT,
+            name VARCHAR(100),
+            department VARCHAR(100),
+            salary INT,
+            city VARCHAR(100)
+        )
+        """
+
+        connection.execute(text(table_query))
+        connection.commit()
+
+        logging.info("Table created successfully")
+
+        file_path = "/Volumes/workspace/default/employee_data/employee_dummy_data.csv"
+
+        #insert data
+        insert_query = text(f"""
+                                INSERT INTO {table_name}
+                                (emp_id, name, department, salary, city)
+                                VALUES
+                                (:emp_id, :name, :department, :salary, :city)
+                                """)
+        #CREATE TABLE AND SEND DATA IN BATCHES
+
+        pd_df = pd.read_csv(file_path)
+
+        total_records = len(pd_df)
+        batch_size = 500
+
+        for batch_start in range(0, total_records, batch_size):
+            batch_end = min (batch_start+batch_size, total_records) #(min of 0+50,100000) = 50
+            batch = pd_df.iloc[batch_start: batch_end] # (0:50)
+
+            batch_records = batch.to_dict(orient="records")
+            connection.execute(insert_query, batch_records)
+            connection.commit()
+
+            logging.info(f"TABLE INSERTED SUCCESSFULLY USING BATCH COUNT OF {batch_start} - {batch_end}")
+
+except SQLAlchemyError as e:
+    logging.info(f"Error while connecting to MySQL: {e}")
+
+finally:
+    if 'engine' in locals():
+        engine.dispose()
+        logging.info("SQLAlchemy connection is closed")
