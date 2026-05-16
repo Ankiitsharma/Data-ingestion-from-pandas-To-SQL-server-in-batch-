@@ -1,0 +1,55 @@
+
+
+#%pip install mysql-connector-python
+#%pip install sqlalchemy
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
+import logging
+from pyspark.sql.functions import count, when, col
+import pandas as pd
+
+#logging configurations
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+#db details 
+hostname = "1a9zf9.h.filess.io"
+database = "employee_wordkeepto"
+port = "3307"
+username = "employee_wordkeepto"
+password = "00e89852b82359eff01145fd1150d8d7512cf329"
+
+#main logic
+try:
+    engine = create_engine(
+        f"mysql+mysqlconnector://{username}:{password}@{hostname}:{port}/{database}"
+    )
+    data_pandas = pd.read_sql("SELECT * FROM employee_data",engine)
+    df = spark.createDataFrame(data_pandas)
+    #we can transform the data here
+    null_df = df.select([count(when(col(c).isNull(), 1)).alias(c) for c in df.columns])
+    null_df.show()
+    logging.info("Displayed NULL counts successfully")
+
+    pandas_df = df.toPandas()
+    logging.info("converted to Pandas DF")
+
+    pandas_df.to_sql(
+        name="employee_target",
+        con=engine,
+        if_exists="append",
+        index=False
+    )
+    logging.info("Data inserted to DB  post Transformations bY pysprk : Enjoy")
+
+except SQLAlchemyError as e:
+    logging.info(f"Error while connecting to MySQL: {e}")
+
+finally:
+    if 'engine' in locals():
+        engine.dispose()
+        logging.info("SQLAlchemy connection is closed")
